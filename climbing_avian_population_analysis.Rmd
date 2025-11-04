@@ -1,0 +1,259 @@
+---
+title: Impact of Climbing Activity on Bird Populations at Climbing Areas
+date: "December 2024"
+author: "Aaron Shikh"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+---
+
+
+# Introduction
+
+Rock Climbing is an ever more popular sport, that is constantly expanding in both the indoor gym climbing scene, as well as the outdoor scene. Climbing on real rock requires establishing climbing areas by drilling bolts into the rock, allowing for future climbers to use them for protection. This relatively unrestricted development of new climbing areas may cause some issues for wildlife however. Specifically, this paper will explore the effect of climbing development and popularity on endangered bird populations. A survey was done on 32 established and well known climbing cliffs in Boulder, Colorado, and various data on bird counts, climber presence, weather and cliff site metrics were collected. Specifically, data on the number birds and types of birds observed during the survey were compiled into one metric called the Community Conservation Value (CCV), which will be the response variable for this paper. Regression methods like linear regression, backward stepwise, lasso, and ridge will be used, as well as a random forest, to try to predict the CCV from surveyed data.
+
+# Understanding the Data
+
+To collect the data, researchers went to 32 climbing cliffs in Colorado, and sat next to the cliff for about 1 hour collecting the following data:
+
+-   Species Richness: Number of different species of birds observed at all cliffs (S)
+-   Total number of species / Total number of birds observed at each cliff ($RA_i$)
+-   Conservation score: Weighted conservation score from 0 to 4 measuring how endangered the observed species of birds were at each cliff ($w_i$)
+
+These three metrics were compiled into the one response variable called Community Conservation Value (CCV), which was calculated by the formula $S\sum(RA_i*w_i)$ which sums over each survey area (i). And the following were the predictor variables gathered at each survey area:
+
+-   Formation: Name of specific cliff, or survey site (Categorical, 32 levels)
+-   Aspect: Cardinal direction (N,S,E,W) that the formation is facing
+-   Total_Climbing_routes: Number of climbing routes at the surveyed cliff (Continuous)
+-   Climbing_use: "High" if popular area, "Low" if less popular area (Categorical, 2 levels)
+-   Climbers: Number of climbers present at the time of survey (Continuous)
+-   Survey_block: Time of day of the survey, eg. Sunrise, Midday, Evening (Categorical, 3 levels)
+-   Other cliff metrics (Height, Elevation, Temperature, Vertical_Angle)
+-   Distance metrics of the cliff site (Distance_to_trails, Distance_to_water, Distance_to_parking)
+
+```{r setup, include=FALSE}
+library(boot)
+library(splines)
+library(leaps)
+library(mgcv)
+library(dplyr)
+library(car)
+library(MASS)
+library(corrplot)
+library(tree)
+library(glmnet)
+library(randomForest)
+
+```
+
+```{r}
+data <- read.csv("avian_cliff_communities_dataset.csv")
+
+colnames(data) <- gsub("^X", "", colnames(data))
+colnames(data) <- gsub("\\.", "_", colnames(data))
+colnames(data) <- gsub("_+", "_", colnames(data))
+colnames(data) <- gsub("^_+|_+$", "", colnames(data))
+
+data <- data[, !(names(data) %in% c("Date", 'Climbing_routes_in_survey_area', "Surveyor", "trees", "Vegetation_SWD", "Foliose_crustose_lichen_ratio", "Arthropod_SWD","Arthropod_biomass", "Vegetation_cover", "scans_with_birds_present_full_survey_area", 'birds_cliff_only', 'birds_full_survey_area', 'Cliff_specialist_bird_species', 'scans_with_birds_on_cliff', 'bird_species_cliff_only', 'SWD_cliff_only', 'bird_species_full_survey_area', 'SWD_full_survey_area'))] 
+
+data <- data %>% mutate(across(.cols = where(is.character),as.factor))
+data <- data %>% rename(CCV = CCV_full_survey_area)
+
+data <- na.omit(data)
+attach(data)
+```
+
+Here we show all of the relationships between the predictors, which can be used for reference whenever a relationship between two predictors is discussed.
+
+```{r}
+numeric_data <- data %>% select_if(is.numeric)
+numeric_predictors <- setdiff(colnames(numeric_data), "CCV")
+categorical_predictors <- c("Formation", "Aspect", 'Climbing_Use', 'Survey_block', 'Climbers_present')
+
+
+for (cat in categorical_predictors) {
+  par(mfrow = c(2, 3))
+  for (num in numeric_predictors) {
+    boxplot(data[[num]] ~ data[[cat]],
+            main = paste(num, "by", cat),
+            xlab = cat, ylab = num,
+            col = "lightblue")
+  }
+}
+
+par(mfrow = c(1, 1))
+```
+
+And the following are all the relationships between CCV and the predictors
+
+```{r}
+par(mfrow = c(2, 3))
+for (predictor in numeric_predictors) {
+  formula <- as.formula(paste('CCV', "~", predictor))
+  model <- lm(formula, data = data)
+  
+  plot(CCV ~ data[[predictor]], ylab = 'CCV', xlab = predictor)
+  abline(model)
+}
+
+for (predictor in categorical_predictors) {
+  boxplot(CCV ~ data[[predictor]],
+          main = paste('CCV vs ', predictor),
+          xlab = predictor,
+          ylab = 'CCV',
+          col = "lightblue")
+}
+
+par(mfrow = c(1, 1))
+```
+
+# Methodology
+
+## Understanding Multicollinearity
+
+Something we will see in this analysis is that in the end, multicollinearity is present in all of the predictors. In the end, the regression results will essentially be used for feature selection, and to get a better understanding of what factors may effect bird populations, whether it be some of predictors, or some confounding variables not present in the dataset. To explore multicollinearity, we can analyze the VIFs and the correlation matrix.
+
+```{r}
+vif_values <- vif(fit <- lm(CCV ~ . -Formation, data = data))
+print(vif_values)
+
+cor_mat <- cor(data %>% select_if(is.numeric), use = "complete.obs")
+corrplot(cor_mat, method = "color", type = "upper", tl.col = "black", tl.srt = 45, diag = FALSE)
+```
+
+From these figures, we can see that some of the predictors form collinear "groups." For example, all of the distance metrics are correlated, as well as the cliff metrics like vertical_angle, elevation, height, and aspect. Formation is also directly correlated with every predictor and hence had to be removed from the VIF chart. Before simply removing predictors, it is also important to remember that confounding variables, relating to bird behavior not recorded in this survey, may be present. These behaviors may be present at different cliffs, and the behaviors could be as simple as birds prefer certain areas over others for nesting, and the locations they choose may not necessarily be related to climbing use.
+
+Next we can attempt to remove certain predictors in this collinear groups, and make our first linear model.
+
+```{r}
+linear_model <- lm(CCV ~ . -Formation - Height_m - Vertical_Angle - Distance_to_trails_m - Distance_to_water_m, data = data)
+summary(linear_model)
+```
+
+This model shows that when all predictors are used, only the cliff Aspect is significant in predicting the CCV.
+
+## Backward Selection
+
+Because we may have one or two predictors that may be the most significant in the model, we will perform backward selection instead of forward to better see the difference in the models.
+
+```{r}
+#backwards
+
+
+backward_model <- regsubsets(CCV ~ . -Formation, data = data, nvmax = ncol(data) - 1, method = "backward")
+model_summary <- summary(backward_model)
+
+results <- data.frame(
+  Model_Size = 1:length(model_summary$adjr2),
+  R2 = model_summary$rsq,
+  Adjusted_R2 = model_summary$adjr2, 
+  CP =  model_summary$cp,
+  BIC = model_summary$bic                                 
+)
+
+
+results$Formula <- apply(model_summary$which, 1, function(row) {
+  included_predictors <- names(row)[row]
+  paste(included_predictors[-1], collapse = " + ")
+})
+
+lowest_bic <- which.min(model_summary$bic)
+plot(model_summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l")
+points(lowest_bic, model_summary$bic[lowest_bic], col = "red")
+
+print(head(results[order(results$BIC), ]))
+
+```
+
+From these results we can see that predictors like aspect, Climbers_present, and total_climbing_routes, which is correlated to climbers and Climbers_present, are the most significant predictors of CCV and result in the lowest BIC, although the $R^2$ is very low, indicating a very poor explanation of the variance of CCV.
+
+## Random Forest
+
+```{r}
+#random forest
+
+set.seed(198)
+train <- sample(1:nrow(data), nrow(data) * 0.7)
+test_data <- data[-train, "CCV"]
+
+mtry <- floor(ncol(data) / 3)
+forest_model <- randomForest(CCV ~ . -Formation, data = data, subset = train, mtry = mtry, ntree = 100, importance = TRUE)
+yhat.rf <- predict(forest_model, newdata = data[-train, ])
+
+MSE <- mean((yhat.rf - test_data)^2)
+print("Test set MSE:")
+print(MSE)
+
+
+importance(forest_model)
+
+varImpPlot(forest_model)
+
+plot(forest_model)
+
+```
+
+The analysis showed that environmental and physical factors of the cliffs, such as Temperature_C, Vertical_Angle, and Height_m, are the most significant predictors of CCV, while Climbing_Use has minimal impact. With a negative %IncMSE and low IncNodePurity, Climbing_Use does not appear to strongly influence CCV, which means that CCV is mainly predicted by environmental factors rather than climbing activity. However, climbing related variables like Climbers and Climbers_present show slight importance, suggesting that climbers may have a slight impact, potentially influencing CCV.
+
+## Ridge and Lasso Regression
+
+```{r}
+#ridge + lasso
+
+train_indices <- sample(1:nrow(data), size = 0.7 * nrow(data))
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+
+
+X_train <- model.matrix(CCV ~ . - Formation, data = train_data)[,-1]
+y_train <- train_data$CCV
+X_test <- model.matrix(CCV ~ . - Formation, data = test_data)[,-1]
+y_test <- test_data$CCV
+
+set.seed(1278)
+lasso_model <- cv.glmnet(X_train, y_train, alpha = 1, nfolds = 10)
+
+lasso_lambda_min <- lasso_model$lambda.min
+print("Best Lambda for Lasso: ")
+print(lasso_lambda_min)
+
+y_pred_lasso <- predict(lasso_model, s = "lambda.min", newx = X_test)
+mse_lasso <- mean((y_test - y_pred_lasso)^2)
+print("MSE for Lasso on Test Set:")
+print(mse_lasso)
+
+set.seed(3345)
+ridge_model <- cv.glmnet(X_train, y_train, alpha = 0, nfolds = 10)
+
+ridge_lambda_min <- ridge_model$lambda.min
+print("Best Lambda for Ridge:")
+print(ridge_lambda_min)
+
+y_pred_ridge <- predict(ridge_model, s = "lambda.min", newx = X_test)
+mse_ridge <- mean((y_test - y_pred_ridge)^2)
+print("MSE for Ridge on Test Set:")
+print(mse_ridge)
+
+lasso_coefs <- coef(lasso_model, s = "lambda.min")
+print("Lasso Coefficients:")
+print(lasso_coefs)
+
+ridge_coefs <- coef(ridge_model, s = "lambda.min")
+print("Ridge Coefficients:")
+print(ridge_coefs)
+
+```
+
+The lasso and ridge analysis showed that environmental factors, such as Temperature_C, Height_m, and Vertical_Angle, are the most significant predictors of CCV, while climbing-related variables like Climbing_Use and Climbers_present have limited significance. Ridge regression achieved a lower MSE (24.7) compared to Lasso (26.24), as Ridge retains small contributions from all variables, including correlated ones, while Lasso excluded climbing related predictors entirely by shrinking their coefficients to zero. The Ridge model retained small coefficients for environmental factors, show their that they are important in predicting CCV.
+
+# Results and Further Exploration
+
+Overall, we can see that the linear model, random forest, lasso and ridge regression, all show that that climbing predictors have a relatively low impact on CCV values. In particular, we find that cliffs facing west may have slightly larger and more diverse bird populations. And and predictors like temperature, which may correlate to the time of day the survey was taken, are more significant than predictors like Climbing_use or Climbers_present. It is also worth noting that in the original diagnostic plots, the box plot of Climbers_present vs CCV seemed to show that the presence of climbers had a lower CCV score, but if we look at climbers vs CCV, and the distribution of climbers during the survey times, we see that almost all the surveys taken had 0 climbers. This means that in the few instances climbers were present, there were slightly fewer birds probably because birds may not want to be around people. This isn't enough evidence to say that climbers effect bird populations however. If we look at the box plots of formation vs CCV, we see that every formation has a different CCV value, which proves that Formation, which is correlated with almost every predictor including external confounding variables about bird behavior, is the main cause of CCV variance.
+
+Some limitations of this study are that there was never a control group taken, on cliffs that are not used for climbing. In theory, we can account for the external variables about bird behavior by also surveying more cliffs without any established climbing routes, and then compare both groups. This would however, also require more cliffs to be surveyed, to better account for and understand the environmental factors at play. Additionally, it is simply very hard to account for the many external environmental and bird behavior variables, that it would take an enormousness amount of effort to better understand the impact of climbing on the CCV of different areas.
+
+# References
+
+Covy N, Benedict L, Keeley WH (2019) Rock climbing activity and physical habitat attributes impact avian community diversity in cliff environments. PLoS ONE 14(1): e0209557. <https://doi.org/10.1371/journal.pone.0209557>

@@ -11,6 +11,12 @@ While the dataset comes from a previously published ecological study, this proje
 
 The primary goal was to explore relationships between climbing activity, cliff characteristics, and bird diversity using modern data-science techniques, while comparing model interpretability and performance.
 
+There are two key files included:
+
+- **`climbing_avian_population_analysis.Rmd`**: the full **RMarkdown source** containing all data cleaning, exploratory analysis, model fitting (linear, ridge, lasso, random forest), and result interpretation.
+
+- **`report.pdf`**: the **final knitted pdf**, presenting the code, results, methods, and conclusions in a clean format.
+
 ---
 
 

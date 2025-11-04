@@ -1,4 +1,4 @@
-# Impact-of-Rock-Climbing-on-Bird-Populations
+# Impact of Rock Climbing on Bird Populations
 *An Ecological Data Science Case Study*
 
 ---

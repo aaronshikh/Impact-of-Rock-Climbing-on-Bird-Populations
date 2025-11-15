@@ -1,21 +1,20 @@
 # Impact of Rock Climbing on Bird Populations
-*An Ecological Data Science Case Study*
 
 ---
 
 ## Overview 
 
-This project investigates how outdoor climbing activity may influence bird diversity and conservation value in cliff environments. Using ecological survey data from **32 climbing cliffs in Boulder, Colorado**, the analysis models the **Community Conservation Value (CCV)**: a composite metric of avian species richness, relative abundance, and conservation importance.
+This project investigates how outdoor climbing activity may influence bird diversity and conservation value in cliff environments. Using ecological survey data from 32 climbing cliffs in Boulder, Colorado, the analysis models the **Community Conservation Value (CCV)**: a composite metric of avian species richness, relative abundance, and conservation importance.
 
-While the dataset comes from a previously published ecological study, this project independently reproduces and extends the analysis using **statistical and machine learning methods implemented in R**, including linear regression, regularized regression (lasso and ridge), and random forest modeling.
+While the dataset comes from a previously published ecological study, this project independently reproduces and extends the analysis using statistical and machine learning methods, including linear regression, regularized regression (lasso and ridge), and random forest modeling.
 
 The primary goal was to explore relationships between climbing activity, cliff characteristics, and bird diversity using modern data-science techniques, while comparing model interpretability and performance.
 
 There are two key files included:
 
-- **`climbing_avian_population_analysis.Rmd`**: the full **RMarkdown source** containing all data cleaning, exploratory analysis, model fitting (linear, ridge, lasso, random forest), and result interpretation.
+- **`climbing_avian_population_analysis.Rmd`**: the full RMarkdown source file containing all data cleaning, exploratory analysis, model fitting (linear, ridge, lasso, random forest), and result interpretation.
 
-- **`report.pdf`**: the **final knitted pdf**, presenting the code, results, methods, and conclusions in a clean format.
+- **`report.pdf`**: the final knitted PDF, presenting the code, results, methods, and conclusions in a clean format.
 
 ---
 
@@ -31,20 +30,12 @@ The dataset analyzed here originates from the published ecological study:
 
 The raw data are publicly available and linked above.
 
-This analysis **reproduces and extends** the study’s findings using simplified and independently written R code.  
-Whereas the original paper applied detailed ecological modeling, this project focuses on:
-
-- Rebuilding the analysis pipeline in RMarkdown,  
-- Applying **regularized regression (ridge and lasso)** and **random forest** models for comparison, and  
-- Evaluating predictor significance, multicollinearity, and model performance using standard data-science methods.
-
 ---
 
-## Methods
+## Methodology
 
 ### Exploratory Data Analysis
-- Cleaned and standardized column names.  
-- Examined numeric and categorical predictor distributions via boxplots.  
+- Examined numeric and categorical predictor distributions.  
 - Checked for multicollinearity using **Variance Inflation Factors (VIF)** and **correlation matrices** (`corrplot`).
 
 ### Modeling
@@ -62,7 +53,7 @@ Whereas the original paper applied detailed ecological modeling, this project fo
 
 ## Results
 
-All modeling approaches consistently showed that **environmental and physical cliff characteristics** were the primary predictors of avian Community Conservation Value (CCV), while **human climbing activity had minimal effect**.
+All modeling approaches consistently showed that environmental and physical cliff characteristics were the primary predictors of avian Community Conservation Value (CCV), while human climbing activity had minimal effect.
 
 - **Linear and stepwise regression** identified *Aspect* (cliff direction) and, to a lesser extent, *Climbers_Present* and *Total_Climbing_Routes* as weakly significant predictors, but overall model fit was low.  
 - **Regularized models** reinforced these results:  
@@ -70,7 +61,7 @@ All modeling approaches consistently showed that **environmental and physical cl
   - *Lasso* (MSE ≈ **26.2**) shrank climbing-related predictors (*Climbing_Use*, *Climbers_Present*) to zero, indicating negligible impact.  
 - **Random forest** achieved the best performance (MSE ≈ **20.8**) and ranked *Temperature*, *Height*, and *Vertical_Angle* as the most important features.  
 
-Overall, **natural cliff attributes dominated CCV prediction**, while climbing variables showed only minor or statistically insignificant effects, complementing the findings of the original study but derived here through regression and machine-learning methods.
+Overall, natural cliff attributes dominated CCV prediction, while climbing variables showed only minor or statistically insignificant effects, complementing the findings of the original study but derived here through regression and machine-learning methods.
 
 ---
 

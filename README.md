@@ -1,10 +1,11 @@
 # Impact of Rock Climbing on Bird Populations
 
----
 
-## Overview 
 
 This project investigates how outdoor climbing activity may influence bird diversity and conservation value in cliff environments. Using ecological survey data from 32 climbing cliffs in Boulder, Colorado, the analysis models the **Community Conservation Value (CCV)**: a composite metric of avian species richness, relative abundance, and conservation importance.
+
+
+## Overview 
 
 While the dataset comes from a previously published ecological study, this project independently reproduces and extends the analysis using statistical and machine learning methods, including linear regression, regularized regression (lasso and ridge), and random forest modeling.
 
